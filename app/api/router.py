@@ -1,4 +1,6 @@
-#from app.api.features.schemas.schemas import RequestSchema, SpellingCheckerRequestArgs
+from app.api.features.ai_resistant_service import AIResistantAssignmentGenerator
+from app.api.features.document_loaders import get_docs
+from app.api.features.schemas.ai_resistant_schemas import AIResistantArgs
 from fastapi import APIRouter, Depends
 from app.api.logger import setup_logger
 from app.api.auth.auth import key_check
@@ -10,16 +12,18 @@ router = APIRouter()
 def read_root():
     return {"Hello": "World"}
 
-# @router.post("/check-spelling")
-# async def submit_tool( data: RequestSchema, _ = Depends(key_check)):
-#     logger.info(f"Loading request args...")
-#     args = SpellingCheckerRequestArgs(spelling_checker_schema=data)
-#     logger.info(f"Args. loaded successfully")
+@router.post("/ai-resistant-assignments")
+async def submit_tool( data: AIResistantArgs, _ = Depends(key_check)):
+    try:
+        logger.info(f"File URL loaded: {data.file_url}")
 
-#     chain = compile_chain()
-
-#     logger.info("Generating the spelling checking analysis")
-#     results = chain.invoke(args.validate_and_return())
-#     logger.info("The spelling checking analysis has been successfully generated")
-
-#     return results
+        docs = get_docs(data.file_url, data.file_type, True)
+    
+        output = AIResistantAssignmentGenerator(args=data, verbose=True).create_assignments(docs)
+    
+    except Exception as e:
+        error_message = f"Error in executor: {e}"
+        logger.error(error_message)
+        raise ValueError(error_message)
+    
+    return output
