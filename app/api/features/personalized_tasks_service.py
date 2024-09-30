@@ -1,13 +1,14 @@
-from typing import List
+from typing import List, Dict
 import os
 
-from app.api.features.schemas.ai_resistant_schemas import AIResistantOutput
+from app.api.features.schemas.personalized_tasks_schemas import RecommendationsOutput
 from app.api.logger import setup_logger
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 from langchain_core.output_parsers import JsonOutputParser
+from pydantic import BaseModel, Field
 from langchain_google_genai import GoogleGenerativeAI
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
@@ -27,13 +28,13 @@ def read_text_file(file_path):
     with open(absolute_file_path, 'r') as file:
         return file.read()
     
-class AIResistantAssignmentGenerator:
+class AIConnectWithThemGenerator:
     def __init__(self, args=None, vectorstore_class=Chroma, prompt=None, embedding_model=None, model=None, parser=None, verbose=False):
         default_config = {
             "model": GoogleGenerativeAI(model="gemini-1.5-flash"),
             "embedding_model": GoogleGenerativeAIEmbeddings(model='models/embedding-001'),
-            "parser": JsonOutputParser(pydantic_object=AIResistantOutput),
-            "prompt": read_text_file("prompt/ai-resistant-prompt.txt"),
+            "parser": JsonOutputParser(pydantic_object=RecommendationsOutput),
+            "prompt": read_text_file("prompt/connect-with-them-prompt.txt"),
             "vectorstore_class": Chroma
         }
 
@@ -48,10 +49,10 @@ class AIResistantAssignmentGenerator:
         self.verbose = verbose
 
         if vectorstore_class is None: raise ValueError("Vectorstore must be provided")
-        if args.topic is None: raise ValueError("Topic must be provided")
-        if args.assignment is None: raise ValueError("Assignment must be provided")
         if args.grade_level is None: raise ValueError("Grade Level must be provided")
-        if args.grade_level is None: raise ValueError("Language must be provided")
+        if args.task_description is None: raise ValueError("Task Description must be provided")
+        if args.students_description is None: raise ValueError("Student Description Level must be provided")
+        if args.lang is None: raise ValueError("Language must be provided")
 
 
     def compile(self, documents: List[Document]):
@@ -63,12 +64,12 @@ class AIResistantAssignmentGenerator:
         )
 
         if self.runner is None:
-            logger.info(f"Creating vectorstore from {len(documents)} documents") if self.verbose else None
+            print(f"Creating vectorstore from {len(documents)} documents") if self.verbose else None
             self.vectorstore = self.vectorstore_class.from_documents(documents, self.embedding_model)
-            logger.info(f"Vectorstore created") if self.verbose else None
+            print(f"Vectorstore created") if self.verbose else None
 
             self.retriever = self.vectorstore.as_retriever()
-            logger.info(f"Retriever created successfully") if self.verbose else None
+            print(f"Retriever created successfully") if self.verbose else None
 
             self.runner = RunnableParallel(
                 {"context": self.retriever,
@@ -78,18 +79,21 @@ class AIResistantAssignmentGenerator:
 
         chain = self.runner | prompt | self.model | self.parser
 
-        if self.verbose: logger.info(f"Chain compilation complete")
+        if self.verbose: print(f"Chain compilation complete")
 
         return chain
 
-    def create_assignments(self, documents: List[Document]):
-        if self.verbose: logger.info(f"Creating the AI-Resistant assignments")
+    def generate_suggestion(self, documents: List[Document]):
+        if self.verbose: print(f"Creating the AI Connect with Them suggestions")
 
         chain = self.compile(documents)
 
-        response = chain.invoke(f"Topic: {self.args.topic}, Assignment: {self.args.assignment}, Grade Level: {self.args.grade_level}, Language (YOU MUST RESPOND IN THIS LANGUAGE): {self.args.lang}")
+        response = chain.invoke(f"""Grade Level: {self.args.grade_level},
+          Task Description: {self.args.task_description},
+          Student's Description: {self.args.students_description},
+          Language (YOU MUST RESPOND IN THIS LANGUAGE): {self.args.lang}""")
 
-        if self.verbose: logger.info(f"Deleting vectorstore")
+        if self.verbose: print(f"Deleting vectorstore")
         self.vectorstore.delete_collection()
 
         return response
