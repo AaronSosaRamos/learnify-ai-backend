@@ -64,12 +64,12 @@ class RubricGenerator:
         )
 
         if self.runner is None:
-            print(f"Creating vectorstore from {len(documents)} documents") if self.verbose else None
+            logger.info(f"Creating vectorstore from {len(documents)} documents") if self.verbose else None
             self.vectorstore = self.vectorstore_class.from_documents(documents, self.embedding_model)
-            print(f"Vectorstore created") if self.verbose else None
+            logger.info(f"Vectorstore created") if self.verbose else None
 
             self.retriever = self.vectorstore.as_retriever()
-            print(f"Retriever created successfully") if self.verbose else None
+            logger.info(f"Retriever created successfully") if self.verbose else None
 
             self.runner = RunnableParallel(
                 {"context": self.retriever,
@@ -79,18 +79,18 @@ class RubricGenerator:
 
         chain = self.runner | prompt | self.model | self.parser
 
-        if self.verbose: print(f"Chain compilation complete")
+        if self.verbose: logger.info(f"Chain compilation complete")
 
         return chain
 
     def generate_rubric(self, documents: List[Document]):
-        if self.verbose: print(f"Creating the Rubric")
+        if self.verbose: logger.info(f"Creating the Rubric")
 
         chain = self.compile(documents)
 
         response = chain.invoke(f"Grade Level: {self.args.grade_level}, Point Scale: {self.args.point_scale}, Standard: {self.args.standard}, Language (YOU MUST RESPOND IN THIS LANGUAGE): {self.args.lang}")
 
-        if self.verbose: print(f"Deleting vectorstore")
+        if self.verbose: logger.info(f"Deleting vectorstore")
         self.vectorstore.delete_collection()
 
         return response
